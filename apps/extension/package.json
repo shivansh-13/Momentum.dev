@@ -1,13 +1,23 @@
 {
-  "name": "@momentum/extension",
+  "name": "momentum-dev-extension",
+  "displayName": "Momentum.dev",
+  "description": "Privacy-first coding consistency tracker for developers.",
+  "publisher": "momentum-dev",
   "version": "0.1.0",
-  "private": true,
+  "private": false,
   "main": "dist/extension.js",
+  "categories": ["Other"],
+  "keywords": ["productivity", "developer", "streak", "focus", "coding"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-org/momentum.dev"
+  },
   "engines": {
     "vscode": "^1.95.0"
   },
   "activationEvents": [
     "onStartupFinished",
+    "onCommand:momentum.openDashboard",
     "onCommand:momentum.pair",
     "onCommand:momentum.startSession",
     "onCommand:momentum.pauseSession",
@@ -15,6 +25,10 @@
   ],
   "contributes": {
     "commands": [
+      {
+        "command": "momentum.openDashboard",
+        "title": "Momentum: Open Dashboard"
+      },
       {
         "command": "momentum.pair",
         "title": "Momentum: Pair Device"
@@ -61,13 +75,13 @@
     "dev": "tsc -p tsconfig.json --watch",
     "typecheck": "echo \"typecheck skipped\"",
     "lint": "echo \"lint extension\"",
-    "test": "vitest run"
+    "test": "vitest run",
+    "package:vsix": "npx @vscode/vsce package -o momentum-dev.vsix",
+    "publish:marketplace": "npx @vscode/vsce publish"
   },
-  "dependencies": {
-    "@momentum/sdk": "workspace:*",
-    "@momentum/shared-types": "workspace:*"
-  },
+  "dependencies": {},
   "devDependencies": {
-    "@types/vscode": "^1.95.0"
+    "@types/vscode": "^1.95.0",
+    "@vscode/vsce": "^3.2.2"
   }
 }

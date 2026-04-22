@@ -2,12 +2,24 @@
   "version": "2.0.0",
   "tasks": [
     {
+      "label": "momentum: prepare local backend",
+      "type": "shell",
+      "command": "npx supabase start; Start-Process powershell -ArgumentList '-NoExit','-Command','Set-Location ''${workspaceFolder}/services/supabase''; npx supabase functions serve'",
+      "problemMatcher": []
+    },
+    {
       "label": "momentum: build extension",
       "type": "shell",
       "command": "npx",
-      "args": ["pnpm", "--filter", "@momentum/extension", "build"],
+      "args": ["pnpm", "--filter", "momentum-dev-extension", "build"],
       "problemMatcher": ["$tsc"],
       "group": "build"
+    },
+    {
+      "label": "momentum: local dev prepare",
+      "dependsOn": ["momentum: prepare local backend", "momentum: build extension"],
+      "dependsOrder": "sequence",
+      "problemMatcher": []
     }
   ]
 }

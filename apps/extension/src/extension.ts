@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import * as vscode from 'vscode';
 import { ActivityTracker } from './activityTracker.js';
+import { DashboardPanel } from './dashboardPanel.js';
 import { PairingFlow } from './pairingFlow.js';
 import { SessionManager } from './sessionManager.js';
 import { SyncClient } from './syncClient.js';
@@ -16,6 +17,7 @@ export async function activate(context: vscode.ExtensionContext) {
   const heartbeatIntervalSeconds = config.get<number>('heartbeatIntervalSeconds', 60);
 
   const pairingFlow = new PairingFlow(context);
+  const dashboard = new DashboardPanel();
   const sessionManager = new SessionManager();
 
   const runtime = {
@@ -59,6 +61,26 @@ export async function activate(context: vscode.ExtensionContext) {
     });
   };
 
+  const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
+  statusBar.command = 'momentum.openDashboard';
+  statusBar.show();
+  context.subscriptions.push(statusBar);
+
+  const updateUi = () => {
+    const snapshot = sessionManager.getSnapshot();
+    const paired = Boolean(runtime.userId && runtime.deviceId && runtime.deviceJwt);
+    const elapsedSeconds = Math.floor(snapshot.elapsedMs / 1000);
+
+    statusBar.text = `$(pulse) Momentum ${snapshot.state === 'running' ? elapsedSeconds + 's' : snapshot.state}`;
+    statusBar.tooltip = paired ? 'Momentum connected' : 'Momentum not paired';
+
+    dashboard.update({
+      paired,
+      sessionState: snapshot.state,
+      elapsedSeconds,
+    });
+  };
+
   activityTracker = new ActivityTracker({
     idleThresholdSeconds,
     heartbeatIntervalSeconds,
@@ -75,55 +97,103 @@ export async function activate(context: vscode.ExtensionContext) {
     void syncClient.flush();
   }, 15_000);
 
+  const uiTimer = setInterval(() => {
+    updateUi();
+  }, 1000);
+
   context.subscriptions.push({
     dispose: () => clearInterval(flushTimer),
   });
+  context.subscriptions.push({
+    dispose: () => clearInterval(uiTimer),
+  });
+
+  const runPair = async () => {
+    const result = await pairingFlow.startPairing(apiBaseUrl);
+    if (!result) {
+      return;
+    }
+
+    runtime.userId = result.userId;
+    runtime.deviceId = result.deviceId;
+    runtime.deviceJwt = result.deviceJwt;
+
+    void vscode.window.showInformationMessage('Momentum paired successfully.');
+    updateUi();
+  };
+
+  const runStartSession = async () => {
+    sessionManager.startSession(true);
+    emitSessionEvent('start');
+    await syncClient.flush();
+    void vscode.window.showInformationMessage('Momentum session started.');
+    updateUi();
+  };
+
+  const runPauseSession = async () => {
+    const snapshot = sessionManager.getSnapshot();
+    if (snapshot.state === 'paused') {
+      sessionManager.resumeSession();
+      emitSessionEvent('resume');
+      void vscode.window.showInformationMessage('Momentum session resumed.');
+    } else {
+      sessionManager.pauseSession();
+      emitSessionEvent('pause');
+      void vscode.window.showInformationMessage('Momentum session paused.');
+    }
+    await syncClient.flush();
+    updateUi();
+  };
+
+  const runEndSession = async () => {
+    const snapshot = sessionManager.getSnapshot();
+    if (snapshot.state === 'idle') {
+      void vscode.window.showWarningMessage('No active session to end.');
+      return;
+    }
+
+    emitSessionEvent('complete');
+    sessionManager.endSession();
+    await syncClient.flush();
+    void vscode.window.showInformationMessage('Momentum session completed.');
+    updateUi();
+  };
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('momentum.pair', async () => {
-      const result = await pairingFlow.startPairing(apiBaseUrl);
-      if (!result) {
-        return;
-      }
-
-      runtime.userId = result.userId;
-      runtime.deviceId = result.deviceId;
-      runtime.deviceJwt = result.deviceJwt;
-
-      void vscode.window.showInformationMessage('Momentum paired successfully.');
-    }),
-    vscode.commands.registerCommand('momentum.startSession', async () => {
-      sessionManager.startSession(true);
-      emitSessionEvent('start');
-      await syncClient.flush();
-      void vscode.window.showInformationMessage('Momentum session started.');
-    }),
-    vscode.commands.registerCommand('momentum.pauseSession', async () => {
+    vscode.commands.registerCommand('momentum.openDashboard', async () => {
       const snapshot = sessionManager.getSnapshot();
-      if (snapshot.state === 'paused') {
-        sessionManager.resumeSession();
-        emitSessionEvent('resume');
-        void vscode.window.showInformationMessage('Momentum session resumed.');
-      } else {
-        sessionManager.pauseSession();
-        emitSessionEvent('pause');
-        void vscode.window.showInformationMessage('Momentum session paused.');
-      }
-      await syncClient.flush();
-    }),
-    vscode.commands.registerCommand('momentum.endSession', async () => {
-      const snapshot = sessionManager.getSnapshot();
-      if (snapshot.state === 'idle') {
-        void vscode.window.showWarningMessage('No active session to end.');
-        return;
-      }
+      dashboard.show(context, {
+        paired: Boolean(runtime.userId && runtime.deviceId && runtime.deviceJwt),
+        sessionState: snapshot.state,
+        elapsedSeconds: Math.floor(snapshot.elapsedMs / 1000),
+      });
 
-      emitSessionEvent('complete');
-      sessionManager.endSession();
-      await syncClient.flush();
-      void vscode.window.showInformationMessage('Momentum session completed.');
+      dashboard.onDidReceiveMessage(async (message) => {
+        switch (message.command) {
+          case 'pair':
+            await runPair();
+            break;
+          case 'startSession':
+            await runStartSession();
+            break;
+          case 'pauseSession':
+            await runPauseSession();
+            break;
+          case 'endSession':
+            await runEndSession();
+            break;
+          default:
+            break;
+        }
+      });
     }),
+    vscode.commands.registerCommand('momentum.pair', runPair),
+    vscode.commands.registerCommand('momentum.startSession', runStartSession),
+    vscode.commands.registerCommand('momentum.pauseSession', runPauseSession),
+    vscode.commands.registerCommand('momentum.endSession', runEndSession),
   );
+
+  updateUi();
 }
 
 export function deactivate() {

@@ -1,0 +1,6 @@
+.turbo/**
+src/**
+**/*.ts
+**/*.map
+tsconfig.json
+vitest.config.*
