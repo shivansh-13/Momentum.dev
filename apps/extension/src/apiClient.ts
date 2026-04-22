@@ -1,6 +1,10 @@
 import type {
+  AuthLoginPayload,
+  AuthRegisterPayload,
+  AuthResponse,
   IngestEvent,
   PairPollResponse,
+  ProfileResponse,
   PairStartPayload,
   PairStartResponse,
 } from './types.js';
@@ -30,6 +34,35 @@ export class ApiClient {
     return this.request('/auth/pair-poll', {
       method: 'POST',
       body: payload,
+    });
+  }
+
+  async pairConfirm(payload: { code: string; userId: string }): Promise<{ ok: boolean; pairingId: string }> {
+    return this.request('/auth/pair-confirm', {
+      method: 'POST',
+      body: payload,
+    });
+  }
+
+  async register(payload: AuthRegisterPayload): Promise<AuthResponse> {
+    return this.request('/auth/register', {
+      method: 'POST',
+      body: payload,
+    });
+  }
+
+  async login(payload: AuthLoginPayload): Promise<AuthResponse> {
+    return this.request('/auth/login', {
+      method: 'POST',
+      body: payload,
+    });
+  }
+
+  async profile(payload: { userId: string }): Promise<ProfileResponse> {
+    return this.request('/profile', {
+      method: 'POST',
+      body: payload,
+      withAuth: true,
     });
   }
 

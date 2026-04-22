@@ -74,3 +74,46 @@ export interface PairPollResponse {
   deviceJwt?: string;
   userId?: string;
 }
+
+export interface AuthRegisterPayload {
+  email: string;
+  password: string;
+  displayName: string;
+}
+
+export interface AuthLoginPayload {
+  email: string;
+  password: string;
+}
+
+export interface AuthResponse {
+  userId: string;
+  displayName: string;
+}
+
+export interface ProfileSessionRow {
+  id: string;
+  startedAt: string;
+  endedAt: string | null;
+  durationSeconds: number;
+  status: 'active' | 'paused' | 'completed' | 'abandoned';
+  kind: 'pomodoro' | 'freeform';
+}
+
+export interface ProfileMetrics {
+  codingMinutesToday: number;
+  commitsToday: number;
+  fileSavesToday: number;
+  sessionsToday: number;
+  momentumScoreToday: number;
+  totalHours: number;
+  completedSessions: number;
+  topLanguages: Array<{ language: string; seconds: number }>;
+  recentSessions: ProfileSessionRow[];
+}
+
+export interface ProfileResponse {
+  userId: string;
+  displayName: string;
+  metrics: ProfileMetrics;
+}

@@ -2,7 +2,7 @@
   "name": "momentum-dev-extension",
   "displayName": "Momentum.dev",
   "description": "Privacy-first coding consistency tracker for developers.",
-  "publisher": "momentum-dev",
+  "publisher": "ShivanshShrivastava",
   "version": "0.1.0",
   "private": false,
   "main": "dist/extension.js",
@@ -18,6 +18,9 @@
   "activationEvents": [
     "onStartupFinished",
     "onCommand:momentum.openDashboard",
+    "onCommand:momentum.register",
+    "onCommand:momentum.login",
+    "onCommand:momentum.refreshProfile",
     "onCommand:momentum.pair",
     "onCommand:momentum.startSession",
     "onCommand:momentum.pauseSession",
@@ -28,6 +31,18 @@
       {
         "command": "momentum.openDashboard",
         "title": "Momentum: Open Dashboard"
+      },
+      {
+        "command": "momentum.register",
+        "title": "Momentum: Register"
+      },
+      {
+        "command": "momentum.login",
+        "title": "Momentum: Login"
+      },
+      {
+        "command": "momentum.refreshProfile",
+        "title": "Momentum: Refresh Profile"
       },
       {
         "command": "momentum.pair",

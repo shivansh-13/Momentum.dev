@@ -1,13 +1,17 @@
 import { createHash, randomUUID } from 'node:crypto';
+import { exec as execCallback } from 'node:child_process';
+import { promisify } from 'node:util';
 import * as vscode from 'vscode';
 import type { HeartbeatEvent, Mode } from './types.js';
+
+const exec = promisify(execCallback);
 
 interface TrackerConfig {
   idleThresholdSeconds: number;
   heartbeatIntervalSeconds: number;
   mode: Mode;
-  userId: string;
-  deviceId: string;
+  getUserId: () => string;
+  getDeviceId: () => string;
   onHeartbeat: (event: HeartbeatEvent) => void;
   getSessionId: () => string | null;
 }
@@ -18,6 +22,7 @@ export class ActivityTracker {
   private activeLanguage = 'plaintext';
   private filesSaved = 0;
   private localCommits = 0;
+  private lastCommitCount: number | null = null;
   private timer: NodeJS.Timeout | null = null;
 
   constructor(config: TrackerConfig) {
@@ -46,7 +51,9 @@ export class ActivityTracker {
       }),
     );
 
-    this.timer = setInterval(() => this.emitHeartbeat(), this.config.heartbeatIntervalSeconds * 1000);
+    this.timer = setInterval(() => {
+      void this.emitHeartbeat();
+    }, this.config.heartbeatIntervalSeconds * 1000);
   }
 
   stop(): void {
@@ -64,7 +71,7 @@ export class ActivityTracker {
     this.lastActivityAtMs = Date.now();
   }
 
-  private emitHeartbeat(): void {
+  private async emitHeartbeat(): Promise<void> {
     const now = Date.now();
     const idleMs = now - this.lastActivityAtMs;
     const idleThresholdMs = this.config.idleThresholdSeconds * 1000;
@@ -74,12 +81,15 @@ export class ActivityTracker {
 
     const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? 'no-workspace';
     const projectHash = createHash('sha256').update(workspacePath).digest('hex');
+    const commitDelta = await this.readCommitDelta(workspacePath);
+
+    this.localCommits += commitDelta;
 
     const event: HeartbeatEvent = {
       type: 'heartbeat',
       clientEventId: randomUUID(),
-      deviceId: this.config.deviceId,
-      userId: this.config.userId,
+      deviceId: this.config.getDeviceId(),
+      userId: this.config.getUserId(),
       occurredAt: new Date(now).toISOString(),
       mode: this.config.mode,
       activeSeconds,
@@ -94,5 +104,30 @@ export class ActivityTracker {
     this.filesSaved = 0;
     this.localCommits = 0;
     this.config.onHeartbeat(event);
+  }
+
+  private async readCommitDelta(workspacePath: string): Promise<number> {
+    if (workspacePath === 'no-workspace') {
+      return 0;
+    }
+
+    try {
+      const { stdout } = await exec('git rev-list --count HEAD', { cwd: workspacePath });
+      const currentCount = Number.parseInt(stdout.trim(), 10);
+      if (!Number.isFinite(currentCount)) {
+        return 0;
+      }
+
+      if (this.lastCommitCount === null) {
+        this.lastCommitCount = currentCount;
+        return 0;
+      }
+
+      const delta = Math.max(0, currentCount - this.lastCommitCount);
+      this.lastCommitCount = currentCount;
+      return delta;
+    } catch {
+      return 0;
+    }
   }
 }

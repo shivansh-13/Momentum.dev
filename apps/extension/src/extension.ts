@@ -1,11 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import * as vscode from 'vscode';
 import { ActivityTracker } from './activityTracker.js';
+import { ApiClient } from './apiClient.js';
 import { DashboardPanel } from './dashboardPanel.js';
 import { PairingFlow } from './pairingFlow.js';
 import { SessionManager } from './sessionManager.js';
 import { SyncClient } from './syncClient.js';
-import type { Mode, SessionEventState } from './types.js';
+import type { Mode, ProfileMetrics, SessionEventState } from './types.js';
 
 let activityTracker: ActivityTracker | null = null;
 
@@ -24,7 +25,20 @@ export async function activate(context: vscode.ExtensionContext) {
     userId: null as string | null,
     deviceId: null as string | null,
     deviceJwt: null as string | null,
+    userName: '' as string,
+    profile: null as ProfileMetrics | null,
   };
+
+  const apiClient = new ApiClient({
+    apiBaseUrl,
+    getDeviceJwt: async () => runtime.deviceJwt,
+  });
+
+  const savedUser = await pairingFlow.getSavedUser();
+  if (savedUser) {
+    runtime.userId = savedUser.userId;
+    runtime.userName = savedUser.displayName ?? '';
+  }
 
   const maybeCredentials = await pairingFlow.getSavedCredentials();
   if (maybeCredentials) {
@@ -37,6 +51,23 @@ export async function activate(context: vscode.ExtensionContext) {
     apiBaseUrl,
     getDeviceJwt: async () => runtime.deviceJwt,
   });
+
+  const refreshProfile = async () => {
+    if (!runtime.userId) {
+      runtime.profile = null;
+      updateUi();
+      return;
+    }
+
+    try {
+      const profile = await apiClient.profile({ userId: runtime.userId });
+      runtime.userName = profile.displayName;
+      runtime.profile = profile.metrics;
+    } catch {
+      // Keep UI responsive even if backend is unavailable.
+    }
+    updateUi();
+  };
 
   const emitSessionEvent = (state: SessionEventState) => {
     if (!runtime.userId || !runtime.deviceId) {
@@ -78,6 +109,8 @@ export async function activate(context: vscode.ExtensionContext) {
       paired,
       sessionState: snapshot.state,
       elapsedSeconds,
+      userName: runtime.userName,
+      profile: runtime.profile,
     });
   };
 
@@ -85,8 +118,8 @@ export async function activate(context: vscode.ExtensionContext) {
     idleThresholdSeconds,
     heartbeatIntervalSeconds,
     mode,
-    userId: runtime.userId ?? '00000000-0000-0000-0000-000000000000',
-    deviceId: runtime.deviceId ?? '00000000-0000-0000-0000-000000000000',
+    getUserId: () => runtime.userId ?? '00000000-0000-0000-0000-000000000000',
+    getDeviceId: () => runtime.deviceId ?? '00000000-0000-0000-0000-000000000000',
     onHeartbeat: (event) => syncClient.enqueue(event),
     getSessionId: () => sessionManager.getSnapshot().sessionId,
   });
@@ -119,7 +152,39 @@ export async function activate(context: vscode.ExtensionContext) {
     runtime.deviceJwt = result.deviceJwt;
 
     void vscode.window.showInformationMessage('Momentum paired successfully.');
-    updateUi();
+    await refreshProfile();
+  };
+
+  const runRegister = async () => {
+    try {
+      const result = await pairingFlow.register(apiBaseUrl);
+      if (!result) {
+        return;
+      }
+
+      runtime.userId = result.userId;
+      runtime.userName = result.displayName;
+      void vscode.window.showInformationMessage('Momentum account created. Pair your device next.');
+      await refreshProfile();
+    } catch (error) {
+      void vscode.window.showErrorMessage((error as Error).message);
+    }
+  };
+
+  const runLogin = async () => {
+    try {
+      const result = await pairingFlow.login(apiBaseUrl);
+      if (!result) {
+        return;
+      }
+
+      runtime.userId = result.userId;
+      runtime.userName = result.displayName;
+      void vscode.window.showInformationMessage('Momentum login successful. Pair your device next.');
+      await refreshProfile();
+    } catch (error) {
+      void vscode.window.showErrorMessage((error as Error).message);
+    }
   };
 
   const runStartSession = async () => {
@@ -127,7 +192,7 @@ export async function activate(context: vscode.ExtensionContext) {
     emitSessionEvent('start');
     await syncClient.flush();
     void vscode.window.showInformationMessage('Momentum session started.');
-    updateUi();
+    await refreshProfile();
   };
 
   const runPauseSession = async () => {
@@ -142,7 +207,7 @@ export async function activate(context: vscode.ExtensionContext) {
       void vscode.window.showInformationMessage('Momentum session paused.');
     }
     await syncClient.flush();
-    updateUi();
+    await refreshProfile();
   };
 
   const runEndSession = async () => {
@@ -156,7 +221,7 @@ export async function activate(context: vscode.ExtensionContext) {
     sessionManager.endSession();
     await syncClient.flush();
     void vscode.window.showInformationMessage('Momentum session completed.');
-    updateUi();
+    await refreshProfile();
   };
 
   context.subscriptions.push(
@@ -166,12 +231,23 @@ export async function activate(context: vscode.ExtensionContext) {
         paired: Boolean(runtime.userId && runtime.deviceId && runtime.deviceJwt),
         sessionState: snapshot.state,
         elapsedSeconds: Math.floor(snapshot.elapsedMs / 1000),
+        userName: runtime.userName,
+        profile: runtime.profile,
       });
 
       dashboard.onDidReceiveMessage(async (message) => {
         switch (message.command) {
           case 'pair':
             await runPair();
+            break;
+          case 'register':
+            await runRegister();
+            break;
+          case 'login':
+            await runLogin();
+            break;
+          case 'refreshProfile':
+            await refreshProfile();
             break;
           case 'startSession':
             await runStartSession();
@@ -187,13 +263,16 @@ export async function activate(context: vscode.ExtensionContext) {
         }
       });
     }),
+    vscode.commands.registerCommand('momentum.register', runRegister),
+    vscode.commands.registerCommand('momentum.login', runLogin),
+    vscode.commands.registerCommand('momentum.refreshProfile', refreshProfile),
     vscode.commands.registerCommand('momentum.pair', runPair),
     vscode.commands.registerCommand('momentum.startSession', runStartSession),
     vscode.commands.registerCommand('momentum.pauseSession', runPauseSession),
     vscode.commands.registerCommand('momentum.endSession', runEndSession),
   );
 
-  updateUi();
+  await refreshProfile();
 }
 
 export function deactivate() {

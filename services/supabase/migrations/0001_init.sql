@@ -10,6 +10,13 @@ create table if not exists public.users (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.user_auth (
+  user_id uuid primary key references public.users(id) on delete cascade,
+  email text not null unique,
+  password_hash text not null,
+  created_at timestamptz not null default now()
+);
+
 create table if not exists public.devices (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references public.users(id) on delete cascade,
@@ -170,6 +177,7 @@ create index if not exists idx_sessions_active on public.sessions(user_id, statu
 create index if not exists idx_notifications_due on public.notifications(status, scheduled_for) where status = 'pending';
 
 alter table public.users enable row level security;
+alter table public.user_auth enable row level security;
 alter table public.devices enable row level security;
 alter table public.pairing_codes enable row level security;
 alter table public.sessions enable row level security;
@@ -190,6 +198,9 @@ create policy users_select_own on public.users
 
 create policy users_update_own on public.users
   for update using (id = auth.uid());
+
+create policy user_auth_none on public.user_auth
+  for all using (false) with check (false);
 
 create policy devices_select_own on public.devices
   for select using (user_id = auth.uid());

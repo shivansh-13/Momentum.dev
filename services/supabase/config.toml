@@ -24,5 +24,14 @@ verify_jwt = false
 [functions.auth-pair-confirm]
 verify_jwt = false
 
+[functions.auth-register]
+verify_jwt = false
+
+[functions.auth-login]
+verify_jwt = false
+
+[functions.profile]
+verify_jwt = false
+
 [functions.sync-vscode]
 verify_jwt = false

@@ -1,13 +1,17 @@
 import * as vscode from 'vscode';
+import type { ProfileMetrics } from './types.js';
 
 export interface DashboardState {
   paired: boolean;
   sessionState: 'idle' | 'running' | 'paused';
   elapsedSeconds: number;
+  userName: string;
+  profile: ProfileMetrics | null;
 }
 
 export class DashboardPanel {
   private panel: vscode.WebviewPanel | null = null;
+  private messageDisposable: vscode.Disposable | undefined;
 
   show(context: vscode.ExtensionContext, state: DashboardState): void {
     if (this.panel) {
@@ -38,7 +42,9 @@ export class DashboardPanel {
     if (!this.panel) {
       return undefined;
     }
-    return this.panel.webview.onDidReceiveMessage(listener);
+    this.messageDisposable?.dispose();
+    this.messageDisposable = this.panel.webview.onDidReceiveMessage(listener);
+    return this.messageDisposable;
   }
 
   update(state: DashboardState): void {
@@ -63,6 +69,27 @@ export class DashboardPanel {
     const minutes = Math.floor(state.elapsedSeconds / 60);
     const seconds = state.elapsedSeconds % 60;
     const elapsed = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+    const metrics = state.profile;
+    const languageChips = (metrics?.topLanguages ?? [])
+      .slice(0, 5)
+      .map(
+        (item) =>
+          `<span class="chip">${escapeHtml(item.language)} ${Math.floor(item.seconds / 60)}m</span>`,
+      )
+      .join('');
+
+    const sessionRows = (metrics?.recentSessions ?? [])
+      .slice(0, 8)
+      .map((s) => {
+        const minutes = Math.floor(s.durationSeconds / 60);
+        return `<tr>
+          <td>${escapeHtml(s.kind)}</td>
+          <td>${escapeHtml(s.status)}</td>
+          <td>${minutes}m</td>
+          <td>${new Date(s.startedAt).toLocaleString()}</td>
+        </tr>`;
+      })
+      .join('');
 
     this.panel.webview.html = `<!DOCTYPE html>
 <html lang="en">
@@ -135,6 +162,13 @@ export class DashboardPanel {
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
       gap: 8px;
+      margin-bottom: 12px;
+    }
+    .auth-actions {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      margin-bottom: 12px;
     }
     button {
       border: 1px solid #2d4d64;
@@ -152,12 +186,53 @@ export class DashboardPanel {
     .start { border-color: #3a9f6f; }
     .pause { border-color: #c78e3a; }
     .end { border-color: #bb4f4d; }
+    .register { border-color: #4a7bd9; }
+    .login { border-color: #5488ef; }
+    .refresh { border-color: #407f6b; }
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 10px 0 14px;
+    }
+    .chip {
+      border: 1px solid #2f4d61;
+      background: #0f1f2b;
+      border-radius: 999px;
+      padding: 4px 10px;
+      font-size: 12px;
+      color: #cde3f2;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+      margin-top: 8px;
+    }
+    th, td {
+      border-bottom: 1px solid #274359;
+      text-align: left;
+      padding: 8px 4px;
+      color: #d9eaf6;
+    }
+    th {
+      color: #8ca4b7;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
   </style>
 </head>
 <body>
   <div class="card">
     <h1 class="title">Momentum.dev</h1>
-    <p class="meta">The app that keeps developers consistent</p>
+    <p class="meta">The app that keeps developers consistent${state.userName ? ` • ${escapeHtml(state.userName)}` : ''}</p>
+
+    <div class="auth-actions">
+      <button class="register" onclick="send('register')">Register</button>
+      <button class="login" onclick="send('login')">Login</button>
+      <button class="refresh" onclick="send('refreshProfile')">Refresh</button>
+    </div>
 
     <div class="stats">
       <div class="stat">
@@ -173,8 +248,24 @@ export class DashboardPanel {
         <p class="stat-value">${elapsed}</p>
       </div>
       <div class="stat">
-        <p class="stat-label">Today</p>
-        <p class="stat-value">Building</p>
+        <p class="stat-label">Today Coding</p>
+        <p class="stat-value">${metrics?.codingMinutesToday ?? 0}m</p>
+      </div>
+      <div class="stat">
+        <p class="stat-label">Commits (Today)</p>
+        <p class="stat-value">${metrics?.commitsToday ?? 0}</p>
+      </div>
+      <div class="stat">
+        <p class="stat-label">File Saves (Today)</p>
+        <p class="stat-value">${metrics?.fileSavesToday ?? 0}</p>
+      </div>
+      <div class="stat">
+        <p class="stat-label">Total Hours</p>
+        <p class="stat-value">${(metrics?.totalHours ?? 0).toFixed(1)}h</p>
+      </div>
+      <div class="stat">
+        <p class="stat-label">Momentum</p>
+        <p class="stat-value">${metrics?.momentumScoreToday ?? 0}</p>
       </div>
     </div>
 
@@ -184,6 +275,24 @@ export class DashboardPanel {
       <button class="pause" onclick="send('pauseSession')">Pause</button>
       <button class="end" onclick="send('endSession')">End</button>
     </div>
+
+    <p class="stat-label">Top Languages</p>
+    <div class="chips">${languageChips || '<span class="chip">No data yet</span>'}</div>
+
+    <p class="stat-label">Recent Sessions</p>
+    <table>
+      <thead>
+        <tr>
+          <th>Kind</th>
+          <th>Status</th>
+          <th>Duration</th>
+          <th>Started</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${sessionRows || '<tr><td colspan="4">No sessions yet</td></tr>'}
+      </tbody>
+    </table>
   </div>
 
   <script>
@@ -195,4 +304,13 @@ export class DashboardPanel {
 </body>
 </html>`;
   }
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
 }

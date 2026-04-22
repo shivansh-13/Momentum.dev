@@ -5,6 +5,7 @@ import {
 import { syncVscodeRequestSchema } from '../../../../packages/shared-types/src/api.ts';
 import { corsHeaders, withCors } from '../_shared/cors.ts';
 import { getAdminClient } from '../_shared/db.ts';
+import { readDeviceIdentity } from '../_shared/deviceAuth.ts';
 
 function confidenceFromType(type: string): 'Verified' | 'Self Reported' {
   if (type === 'output.local_commit') {
@@ -23,6 +24,7 @@ Deno.serve(async (req) => {
   }
 
   try {
+    const identity = readDeviceIdentity(req);
     const body = syncVscodeRequestSchema.parse(await req.json());
     const supabase = getAdminClient();
 
@@ -31,6 +33,10 @@ Deno.serve(async (req) => {
 
     for (const event of body.events) {
       try {
+        if (event.userId !== identity.userId || event.deviceId !== identity.deviceId) {
+          throw new Error('event identity mismatch');
+        }
+
         if (event.type === 'heartbeat') {
           const { error } = await supabase.from('heartbeats').insert({
             user_id: event.userId,
