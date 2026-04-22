@@ -1,0 +1,21 @@
+{
+  "name": "momentum-dev",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@10.16.0",
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev --parallel",
+    "typecheck": "turbo run typecheck",
+    "lint": "turbo run lint",
+    "test": "turbo run test"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.4",
+    "eslint": "^9.21.0",
+    "prettier": "^3.5.2",
+    "turbo": "^2.4.4",
+    "typescript": "^5.8.2",
+    "vitest": "^3.0.8"
+  }
+}

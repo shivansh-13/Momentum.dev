@@ -1,0 +1,8 @@
+node_modules/
+.pnpm-store/
+dist/
+.vscode-test/
+.DS_Store
+.env
+.env.*
+supabase/.temp/
