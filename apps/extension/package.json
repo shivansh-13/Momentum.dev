@@ -1,0 +1,73 @@
+{
+  "name": "@momentum/extension",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/extension.js",
+  "engines": {
+    "vscode": "^1.95.0"
+  },
+  "activationEvents": [
+    "onStartupFinished",
+    "onCommand:momentum.pair",
+    "onCommand:momentum.startSession",
+    "onCommand:momentum.pauseSession",
+    "onCommand:momentum.endSession"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "momentum.pair",
+        "title": "Momentum: Pair Device"
+      },
+      {
+        "command": "momentum.startSession",
+        "title": "Momentum: Start Session"
+      },
+      {
+        "command": "momentum.pauseSession",
+        "title": "Momentum: Pause Session"
+      },
+      {
+        "command": "momentum.endSession",
+        "title": "Momentum: End Session"
+      }
+    ],
+    "configuration": {
+      "title": "Momentum",
+      "properties": {
+        "momentum.apiUrl": {
+          "type": "string",
+          "default": "http://127.0.0.1:54321/functions/v1",
+          "description": "Momentum API base URL"
+        },
+        "momentum.mode": {
+          "type": "string",
+          "enum": ["personal", "work"],
+          "default": "personal"
+        },
+        "momentum.idleThresholdSeconds": {
+          "type": "number",
+          "default": 120
+        },
+        "momentum.heartbeatIntervalSeconds": {
+          "type": "number",
+          "default": 60
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc -p tsconfig.json --watch",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "echo \"lint extension\"",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@momentum/sdk": "workspace:*",
+    "@momentum/shared-types": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.95.0"
+  }
+}
