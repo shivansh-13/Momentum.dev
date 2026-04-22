@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import * as vscode from 'vscode';
-import { MomentumClient } from '@momentum/sdk';
+import { ApiClient } from './apiClient.js';
 
 export interface PairingResult {
   userId: string;
@@ -19,7 +19,7 @@ export class PairingFlow {
   async startPairing(apiBaseUrl: string): Promise<PairingResult | null> {
     const fingerprint = await this.getOrCreateSecret(FINGERPRINT_KEY);
 
-    const client = new MomentumClient({ apiBaseUrl });
+    const client = new ApiClient({ apiBaseUrl });
     const pairStart = await client.pairStart({
       deviceFingerprint: fingerprint,
       deviceName: 'VS Code',

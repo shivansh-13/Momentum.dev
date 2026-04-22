@@ -1,7 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import * as vscode from 'vscode';
-import type { HeartbeatEvent } from '@momentum/shared-types';
-import type { Mode } from './types.js';
+import type { HeartbeatEvent, Mode } from './types.js';
 
 interface TrackerConfig {
   idleThresholdSeconds: number;

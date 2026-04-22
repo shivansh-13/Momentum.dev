@@ -1,5 +1,5 @@
-import type { IngestEvent } from '@momentum/shared-types';
-import { MomentumClient } from '@momentum/sdk';
+import { ApiClient } from './apiClient.js';
+import type { IngestEvent } from './types.js';
 
 export interface SyncClientOptions {
   apiBaseUrl: string;
@@ -28,9 +28,9 @@ export class SyncClient {
       return;
     }
 
-    const client = new MomentumClient({
+    const client = new ApiClient({
       apiBaseUrl: this.options.apiBaseUrl,
-      deviceJwt,
+      getDeviceJwt: async () => deviceJwt,
     });
 
     const events = this.queue.splice(0, this.queue.length);

@@ -5,3 +5,72 @@ export interface ExtensionRuntimeState {
   deviceId: string | null;
   deviceJwt: string | null;
 }
+
+export type SessionEventState =
+  | 'start'
+  | 'tick'
+  | 'pause'
+  | 'resume'
+  | 'complete'
+  | 'abandon';
+
+export interface HeartbeatEvent {
+  type: 'heartbeat';
+  clientEventId: string;
+  deviceId: string;
+  userId: string;
+  occurredAt: string;
+  mode: Mode;
+  activeSeconds: number;
+  idleSeconds: number;
+  language: string;
+  projectHash: string;
+  filesSaved: number;
+  localCommits: number;
+  sessionId?: string | null;
+}
+
+export interface SessionEvent {
+  type: 'session';
+  clientEventId: string;
+  deviceId: string;
+  userId: string;
+  occurredAt: string;
+  mode: Mode;
+  sessionId: string;
+  state: SessionEventState;
+  durationSeconds: number;
+  pomodoro: boolean;
+}
+
+export interface OutputLocalCommitEvent {
+  type: 'output.local_commit';
+  clientEventId: string;
+  deviceId: string;
+  userId: string;
+  occurredAt: string;
+  mode: Mode;
+  projectHash: string;
+  commitCountDelta: number;
+}
+
+export type IngestEvent = HeartbeatEvent | SessionEvent | OutputLocalCommitEvent;
+
+export interface PairStartPayload {
+  deviceFingerprint: string;
+  deviceName: string;
+  platform: 'darwin' | 'win32' | 'linux';
+  vscodeVersion: string;
+}
+
+export interface PairStartResponse {
+  pairingId: string;
+  code: string;
+  expiresAt: string;
+}
+
+export interface PairPollResponse {
+  status: 'pending' | 'paired' | 'expired';
+  deviceJwt?: string;
+  userId?: string;
+}

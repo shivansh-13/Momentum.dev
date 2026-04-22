@@ -1,0 +1,13 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "momentum: build extension",
+      "type": "shell",
+      "command": "npx",
+      "args": ["pnpm", "--filter", "@momentum/extension", "build"],
+      "problemMatcher": ["$tsc"],
+      "group": "build"
+    }
+  ]
+}

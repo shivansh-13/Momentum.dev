@@ -1,11 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import * as vscode from 'vscode';
-import type { SessionEvent } from '@momentum/shared-types';
 import { ActivityTracker } from './activityTracker.js';
 import { PairingFlow } from './pairingFlow.js';
 import { SessionManager } from './sessionManager.js';
 import { SyncClient } from './syncClient.js';
-import type { Mode } from './types.js';
+import type { Mode, SessionEventState } from './types.js';
 
 let activityTracker: ActivityTracker | null = null;
 
@@ -37,7 +36,7 @@ export async function activate(context: vscode.ExtensionContext) {
     getDeviceJwt: async () => runtime.deviceJwt,
   });
 
-  const emitSessionEvent = (state: SessionEvent['state']) => {
+  const emitSessionEvent = (state: SessionEventState) => {
     if (!runtime.userId || !runtime.deviceId) {
       return;
     }
